@@ -19,3 +19,9 @@ tracing-subscriber = "0.3"
 # web
 ntex = { version = "0.7", features = ["tokio"] }
 oauth2 = "4.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+strip = true
