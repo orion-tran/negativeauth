@@ -1,7 +1,9 @@
+use auth::authclients::init_clients;
 use config::loader::read_config;
 use tracing::error;
 use web::server::auth_web;
 
+mod auth;
 mod config;
 mod web;
 
@@ -17,7 +19,15 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    if let Err(e) = auth_web(config).await {
+    let auth_clients = match init_clients(&config) {
+        Ok(clients) => clients,
+        Err(e) => {
+            error!("could not create auth clients {}", e);
+            return Ok(());
+        }
+    };
+
+    if let Err(e) = auth_web(config, auth_clients).await {
         error!("error in web server {}", e);
     }
 

@@ -15,11 +15,12 @@ pub(crate) struct ServerConfig {
 
 #[derive(Deserialize)]
 pub(crate) struct AuthConfig {
-    pub(crate) discord: Option<DiscordConfig>,
+    pub(crate) auth_timeout: u32,
+    pub(crate) discord: Option<StandardAuthConfig>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct DiscordConfig {
+pub(crate) struct StandardAuthConfig {
     pub(crate) client_id: String,
     pub(crate) client_secret: String,
 }
