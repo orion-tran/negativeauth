@@ -7,12 +7,18 @@ workers = 4
 # when redirecting, we don't want to route the user to a page that is outside our jurisdiction
 homepage = "http://localhost:8080/"
 # where is this instance hosted? used to generate oauth2 redirect uris
-root_page = "http://localhost:3000/"
+# e.g. http://localhost:3000/ is automatically converted into http://localhost:3000/verify/discord
+# take note: include the trailing slash (/)
+base_url = "http://localhost:3000/"
+
+[redis]
+uri = "redis://localhost:6379/0"
 
 # authentication providers
 [auth]
 # mesaured in seconds, how long we should allow the user to log in for before expiring their request
-auth_timeout = 600
+# default vaue is 900 seconds (15 minutes)
+auth_timeout = 900
 
 # Discord Authentication
 # scopes: identify, email

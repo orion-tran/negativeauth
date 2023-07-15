@@ -10,6 +10,7 @@ anyhow = "1"
 # -> serde
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
+serde_json = "1"
 
 # -> tokio
 tokio = { version = "1", features = ["full"] }
@@ -19,6 +20,10 @@ tracing-subscriber = "0.3"
 # web
 ntex = { version = "0.7", features = ["tokio"] }
 oauth2 = "4.4"
+# this project taught me a valuable lesson: avoid the redis crate :)
+# (lack of logging, atrocious usability)
+rustis = { git = 'https://github.com/orion-tran/rustis.git', features = ["tokio-runtime"] }
+cookie = "0.17.0"
 
 [profile.release]
 opt-level = 3
