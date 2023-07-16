@@ -17,11 +17,21 @@ pub(crate) async fn auth_web(
 
     let address = (config_copy.server.ip.clone(), config_copy.server.port);
 
+    let reqwest = reqwest::Client::builder()
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            " (https://github.com/orion-tran/negativeauth, ",
+            env!("CARGO_PKG_VERSION"),
+            ")",
+        ))
+        .build()?;
+
     web::HttpServer::new(move || {
         web::App::new()
-            .state(config.clone())
-            .state(clients_arc.clone())
-            .state(redis_connection.clone())
+            .state(config.to_owned())
+            .state(clients_arc.to_owned())
+            .state(redis_connection.to_owned())
+            .state(reqwest.to_owned())
             .service(handlers::version)
             .service(handlers::authorize_discord)
             .service(handlers::verify_discord)

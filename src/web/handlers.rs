@@ -1,13 +1,10 @@
-use std::sync::Arc;
+use std::{io::Read, sync::Arc};
 
 use cookie::Cookie;
-use ntex::{
-    http::header::HeaderValue,
-    web::{
-        self,
-        types::{Query, State},
-        HttpRequest, Responder,
-    },
+use ntex::web::{
+    self,
+    types::{Query, State},
+    HttpRequest,
 };
 use oauth2::{
     basic::BasicClient, AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope,
@@ -58,21 +55,23 @@ async fn authorize(
     config: State<Config>,
     redis_connection: State<rustis::client::Client>,
 ) -> ntex::http::Response {
-    if let Some(cookie) = request.headers().get("cookie") {
-        if let Ok(cookie_value) = cookie.to_str() {
-            let cookie_name = format!("na_{}_pending", key);
-            if let Some(matched_cookie) = Cookie::split_parse(cookie_value)
-                .filter_map(|it| it.ok())
-                .find(|it| it.name() == cookie_name)
-            {
-                if matched_cookie.value().is_ascii() && matched_cookie.value() != "none" {
-                    debug!("deleting existing cookie: {}", matched_cookie.value());
-                    if let Err(e) = redis_connection
-                        .del(format!("request_{}_{}", key, matched_cookie.value()))
-                        .await
-                    {
-                        error!("could not delete old pending cookie in redis: {}", e)
-                    }
+    if let Some(Some(cookie)) = request
+        .headers()
+        .get("cookie")
+        .map(|cookie| cookie.to_str().ok())
+    {
+        let cookie_name = format!("na_{}_pending", key);
+        if let Some(matched_cookie) = Cookie::split_parse(cookie)
+            .filter_map(|it| it.ok())
+            .find(|it| it.name() == cookie_name)
+        {
+            if matched_cookie.value().is_ascii() && matched_cookie.value() != "none" {
+                debug!("deleting existing cookie: {}", matched_cookie.value());
+                if let Err(e) = redis_connection
+                    .del(format!("request_{}_{}", key, matched_cookie.value()))
+                    .await
+                {
+                    error!("could not delete old pending cookie in redis: {}", e)
                 }
             }
         }
@@ -169,6 +168,7 @@ pub(crate) async fn verify_discord(
     auth_state: Query<AuthState>,
     auth_clients: State<Arc<AuthClients>>,
     config: State<Config>,
+    reqwest: State<reqwest::Client>,
     redis_connection: State<rustis::client::Client>,
 ) -> impl web::Responder {
     let discord_client = match &auth_clients.discord_client {
@@ -239,6 +239,16 @@ pub(crate) async fn verify_discord(
 
             return web::HttpResponse::Unauthorized().body("Authentication scopes required!");
         }
+    }
+
+    let a = reqwest
+        .get("https://discord.com/api/v10/users/@me")
+        .bearer_auth(access_token.access_token().secret())
+        .send()
+        .await;
+
+    if let Ok(res) = a {
+        info!("{}", res.text().await.expect("ata"));
     }
 
     web::HttpResponse::Ok()
