@@ -163,21 +163,16 @@ pub(crate) async fn authorize_discord(
     .await
 }
 
-#[web::get("/verify/discord")]
-pub(crate) async fn verify_discord(
+async fn verify(
+    key: &str,
+    scopes: &'static [&'static str],
+    auth_client: &BasicClient,
     auth_state: Query<AuthState>,
-    auth_clients: State<Arc<AuthClients>>,
-    config: State<Config>,
     reqwest: State<reqwest::Client>,
     redis_connection: State<rustis::client::Client>,
-) -> impl web::Responder {
-    let discord_client = match &auth_clients.discord_client {
-        Some(v) => v,
-        None => return web::HttpResponse::MethodNotAllowed().finish(),
-    };
-
+) -> ntex::http::Response {
     let request: String = match redis_connection
-        .getdel(format!("request_discord_{}", auth_state.state))
+        .getdel(format!("request_{}_{}", key, auth_state.state))
         .await
     {
         Ok(v) => v,
@@ -199,7 +194,7 @@ pub(crate) async fn verify_discord(
         }
     };
 
-    let access_token = match discord_client
+    let access_token = match auth_client
         .exchange_code(AuthorizationCode::new(auth_state.code.clone()))
         .set_pkce_verifier(session.verifier)
         .request_async(oauth2::reqwest::async_http_client)
@@ -217,15 +212,15 @@ pub(crate) async fn verify_discord(
 
     match access_token.scopes() {
         Some(scopes) => {
-            for required_scope in DISCORD_SCOPES {
+            for required_scope in scopes {
                 if scopes
                     .iter()
-                    .any(|it: &Scope| it.as_str() == *required_scope)
+                    .any(|it: &Scope| it.as_str() == **required_scope)
                 {
                     continue;
                 }
 
-                if let Err(e) = discord_client.revoke_token(access_token.access_token().into()) {
+                if let Err(e) = auth_client.revoke_token(access_token.access_token().into()) {
                     error!("couldn't revoke access token (with missing scopes): {}", e);
                 }
 
@@ -233,7 +228,7 @@ pub(crate) async fn verify_discord(
             }
         }
         None => {
-            if let Err(e) = discord_client.revoke_token(access_token.access_token().into()) {
+            if let Err(e) = auth_client.revoke_token(access_token.access_token().into()) {
                 error!("couldn't revoke access token (with missing scopes): {}", e);
             }
 
@@ -241,20 +236,36 @@ pub(crate) async fn verify_discord(
         }
     }
 
-    let a = reqwest
-        .get("https://discord.com/api/v10/users/@me")
-        .bearer_auth(access_token.access_token().secret())
-        .send()
-        .await;
-
-    if let Ok(res) = a {
-        info!("{}", res.text().await.expect("ata"));
-    }
-
     web::HttpResponse::Ok()
         .header(
             "Set-Cookie",
-            "na_discord_pending=none; Path=/; SameSite=strict; Secure; HttpOnly; Max-Age=0",
+            format!(
+                "na_{}_pending=none; Path=/; SameSite=strict; Secure; HttpOnly; Max-Age=0",
+                key
+            ),
         )
         .body("Authentication successful!")
+}
+
+#[web::get("/verify/discord")]
+pub(crate) async fn verify_discord(
+    auth_state: Query<AuthState>,
+    auth_clients: State<Arc<AuthClients>>,
+    reqwest: State<reqwest::Client>,
+    redis_connection: State<rustis::client::Client>,
+) -> impl web::Responder {
+    let discord_client = match &auth_clients.discord_client {
+        Some(v) => v,
+        None => return web::HttpResponse::MethodNotAllowed().finish(),
+    };
+
+    verify(
+        "discord",
+        DISCORD_SCOPES,
+        discord_client,
+        auth_state,
+        reqwest,
+        redis_connection,
+    )
+    .await
 }
